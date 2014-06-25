@@ -1,13 +1,23 @@
 {% extends "base.html" %}
 {% block content %}
-<div id="header">
-    <h1>Food Trucks</h1>
-</div>
+<div ng-app='TruckApp'>
+    <div ng-controller = 'mainController'>
+        <div id="header">
+            <h1>Food Trucks</h1>
+        </div>
 
-<div id="content">
-</div>
+        <div id="content">
+        </div>
 
-<div id="map-wrapper" class="no-box-sizing">
-    <div id="map" class="map"></div>
+        <div id="map-wrapper" class="no-box-sizing">
+            <div id="map" class="map"></div>
+        </div>
+        <div>
+            <button ng-click="fetch()">fetch</button>
+        </div>
+        <div>
+            <li ng-repeat="tweet in tweets">tweet.text</li>
+        </div>
+    </div>
 </div>
 {% endblock %}

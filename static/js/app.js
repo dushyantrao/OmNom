@@ -1,137 +1,77 @@
-(function() {
-
-// Initializing globals
-window.App = {
-    Models: {},
-    Collections: {},
-    Views: {},
-    Markers: []
-};
-
-//helpers
-window.template = function(id) {
-    return _.template( $(id).html() );
+Truck = function() {
+    var name ="";
+    var marker;
 }
+angular.module('TruckApp', ['ngRoute'])
+        .controller('mainController', ['$scope', '$http','truckService', function($scope, $http, truckService){
+            //controller here.
+            $scope.App = {};
 
-window.getgeoJSONSample = function(geoJson, n) {
-    return { 
-        type: "FeatureCollections" ,
-        features: _.sample(geoJson.features, n) 
-    }
-}
+            var getgeoJSONSample = function(geoJson, n) {
+                return {
+                    type: "FeatureCollections" ,
+                    features: _.sample(geoJson.features, n)
+                }
+            }
 
-window.formatFoodItems = function(fooditems){
-    return (_.sample(_.map(fooditems.split(':'), $.trim), 8)).join(", ")
-}
+            var formatFoodItems = function(fooditems){
+                return (_.sample(_.map(fooditems.split(':'), $.trim), 8)).join(", ")
+            }
 
-/* ------------------------------------------------ */
-App.Map = L.mapbox.map('map', 'prakhar.map-xt3ojyos');
+            var map = L.mapbox.map('map', 'prakhar.map-xt3ojyos');
+            // setting up geoJSON - select a random 30 sample, which can be ratings driven later on
+            $scope.jsonsample = getgeoJSONSample(geoJson, 30);
+            var myLayer = L.mapbox.featureLayer($scope.jsonsample).addTo(map);
+            //myLayer.setGeoJSON($scope.jsonsample);
 
-// MODELS 
-App.Models.Truck = Backbone.Model.extend({
-    default: {
-        pos: -1 // truck that doesnot have a marker
-    },
-    getLatLng: function(){
-        return this.marker.getLatLng();
-    },
-    showOnMap: function(){
-        return this.marker.openPopup();
-    }
-});
+            //add each marker to the map
+            myLayer.eachLayer( function(e){
+                var feature = e.feature;
 
-// COLLECTIONS
-App.Collections.TrucksCollection = Backbone.Collection.extend({
-    model: App.Models.Truck
-});
+                var truck = new Truck(feature);
 
-// VIEWS
-App.Views.Tooltip = Backbone.View.extend({
-    template: template('#tooltipTemplate'),
-    events: {
-        'click': 'testClick'
-    },
-    testClick: function() {
-        // used to capture events on the popup
-    },
-    render: function() {
-        this.$el.html(this.template( this.model.toJSON() ));
-        return this;
-    }
-});
+                truck.name = e.feature.properties.name;
+                truck.marker = feature;
 
-App.Views.TruckView = Backbone.View.extend({
-    tagName: 'li',
-    className: 'truckCard',
-    events: {
-        'click': "focusOnMap"
-    },
-    focusOnMap: function(){
-        App.Map.setView(this.model.marker.getLatLng(), 13);
-        this.model.marker.openPopup();
-    },
-    template: template('#truckTemplate'),
-    render: function(){
-        this.$el.html(this.template( this.model.toJSON() ));
-        return this;
-    }
-});
+                truckService.addTruck(truck);
 
-App.Views.TrucksCollectionView = Backbone.View.extend({
-    tagName: 'ul',
-    id: "trucksList",
-    render: function() {
-        this.collection.each(function(truck){
-            var truckview = new App.Views.TruckView({ model: truck });
-            this.$el.append(truckview.render().el);
-        }, this);
-        return this;
-    }
-});
+                // set the tooltip content
+                var popupContent = '<h1>'+e.feature.properties.name+'</h1>'+
+                '<span class="address">'+e.feature.properties.address+'</span>'+
+                '<p>Serves:'+ formatFoodItems(e.feature.properties.fooditems)+'</p>';
 
-// set up blank trucks collection; TODO: make this non-global
-window.trucksCollection = new App.Collections.TrucksCollection();
+                e.bindPopup(popupContent, { closeButton: true });
+            });
 
-// While adding each marker on map
-App.Map.markerLayer.on("layeradd", function(e){
-    var marker = e.layer,
-        feature = marker.feature;
-    
-    // create a new truck model 
-    var truck = new App.Models.Truck(feature);
+            //on click of the marker. AUX method. We get the truck at the "pos"
+            myLayer.on('click', function(e){
+                var pos = e.layer.feature.properties.name;
+                var model = truckService.getTruck(pos);
+                $scope.feature = model.marker;
+                //i reapply the feature value everytime. else the prev value sticks
+                $scope.$apply();
 
-    // set its property as a marker
-    truck.marker = marker;
-    
-    // set unique ids on model and marker [ for association ] 
-    marker.pos = trucksCollection.length;
-    truck.set('pos', trucksCollection.length);
-    
-    // add it to a collection
-    trucksCollection.add(truck);
+            });
 
-    // set the tooltip content
-    var popupContent = new App.Views.Tooltip({ model: truck }).render().el;
-    marker.bindPopup(popupContent, { closeButton: true });
-});
+            //twitter stuff
+            function fetch(){
+                $http({method:'GET',url:'https://api.twitter.com/1.1/search/tweets.json?q=%40twitterapi'})
+                .success(function(data, status, headers, config){
+                    $scope.tweets = data;
+                })
+                .error(function(data, status, headers, config){
 
-// on click events on the markers
-App.Map.markerLayer.on('click', function(e){
-    var pos = e.layer.pos;
-    var model = trucksCollection.find(function(truck) {
-        // get the model associated with the current marker
-        return truck.get('pos') === pos 
-    });
+                });
+            };
+        }])
+        .factory('truckService',function(){
+            var truckService ={};
+            var truckCollection= [];
 
-});
+            truckService.getTruck = function(name){ return _.findWhere(truckCollection,{ name: name});};
+            truckService.addTruck = function(truck){ truckCollection.push(truck)};
+            truckService.length = function(){ return truckCollection.length};
 
-// setting up geoJSON - select a random 30 sample, which can be ratings driven later on
-window.jsonsample = getgeoJSONSample(geoJson, 30);
-App.Map.markerLayer.setGeoJSON(jsonsample);
+            return truckService;
 
-// Setting up the sidebar
-var trucksView = new App.Views.TrucksCollectionView({ collection: trucksCollection });
-
-// rendering views
-$('#content').html(trucksView.render().el);
-})();
+        })
